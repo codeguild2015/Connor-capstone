@@ -7,6 +7,7 @@
 
 # browser.quit()
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 import unittest
 
 class NewVisitorTest(unittest.TestCase):
@@ -15,8 +16,8 @@ class NewVisitorTest(unittest.TestCase):
 		self.browser = webdriver.Firefox()
 		self.browser.implicitly_wait(3)
 
-	def tearDown(self):
-		self.browser.quit()	
+	# def tearDown(self):
+	# 	self.browser.quit()	
 
 	def test_lands_on_home_page(self):
 		#Thunder goes online to try the new bar app
@@ -40,21 +41,27 @@ class NewVisitorTest(unittest.TestCase):
 			'Location'
 			)
 
-		#the main div has a button id 'search'
-		search_button = self.browser.find_element_by_id('search_button')
-
-		self.assertEqual(search_button.get_attribute('type'), 'button')
-		self.assertEqual("Search", search_button.get_attribute('value'))
-
 		#there is a div with the id 'map'
 		map_div = self.browser.find_element_by_id('map')
-		
+
+		#He types an address for downtown portland into the search box
+		location_inputbox.send_keys('4534 SE Belmont St, Portland, OR 97215')
+
+		#When he hits enter, the page lists the search query in the main div
+		location_inputbox.send_keys(Keys.ENTER)
+
+		import time
+		time.sleep(5)
+
+		# self.assertIn('4534 SE Belmont St, Portland, OR 97215', maindiv)
 
 
 		self.fail('Finish the test!')
 
 
-#He enters an address for downtown portland into the search box
+
+
+
 
 #The google maps element updates to show the location he searched, and populates the map with
 	# x number of bars pinned in an area of y miles around him.

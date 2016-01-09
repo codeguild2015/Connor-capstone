@@ -18,21 +18,35 @@ class HomePageTest(TestCase):
 		expected_html = render_to_string('home.html')
 		self.assertEqual(response.content.decode(), expected_html)
 
-class ItemModelTest(TestCase):
+	def test_home_page_can_save_a_POST_request(self):
+		request = HttpRequest()
+		request.method = 'POST'
+		request.POST['location_text'] = 'Location Text'
 
-	def test_saving_and_retrieving_items(self):
-		first_item = Item()
-		first_item.text = 'The first (ever) list item'
-		first_item.save()
+		response = home_page(request)
 
-		second_item = Item()
-		second_item.text = 'Item the second'
-		second_item.save()
+		self.assertIn('Location Text', response.content.decode())
+		expected_html = render_to_string(
+			'home.html',
+			{'new_location_text': 'Location Text'}
+			)
+		self.assertEqual(response.content.decode(), expected_html)
 
-		saved_items = Item.objects.all()
-		self.assertEqual(saved_items.count(), 2)
+# class ItemModelTest(TestCase):
 
-		first_saved_item = saved_items[0]
-		second_saved_item = saved_items[1]
-		self.assertEqual(first_saved_item.text, 'The first (ever) list item')
-		self.assertEqual(second_saved_item.text, 'Item the second')
+# 	def test_saving_and_retrieving_items(self):
+# 		first_item = Item()
+# 		first_item.text = 'The first (ever) list item'
+# 		first_item.save()
+
+# 		second_item = Item()
+# 		second_item.text = 'Item the second'
+# 		second_item.save()
+
+# 		saved_items = Item.objects.all()
+# 		self.assertEqual(saved_items.count(), 2)
+
+# 		first_saved_item = saved_items[0]
+# 		second_saved_item = saved_items[1]
+# 		self.assertEqual(first_saved_item.text, 'The first (ever) list item')
+# 		self.assertEqual(second_saved_item.text, 'Item the second')
