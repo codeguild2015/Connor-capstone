@@ -3,7 +3,7 @@ from django.shortcuts import render
 import urllib.request, json
 import pprint
 from login.models import Bar
-# from secrets import googlekey
+import login.secrets as secrets
 
 
 
@@ -24,7 +24,8 @@ def render_default_home_page(request):
 def render_after_POST(request):
 	coordinates = get_google_coordinates(request)
 	bars = get_google_bars(coordinates)
-	google_to_model(bars)
+	current_bars = google_to_model(bars)
+	draw_markers(current_bars)
 
 	return render(request, 'home.html', {
 		'new_location_text': coordinates,
@@ -32,7 +33,8 @@ def render_after_POST(request):
 		})
 
 def get_google_coordinates(request):
-	key = '&key=AIzaSyD3lM-WCdhwJtm3D3KUYNjRs3ySwWW3tm0'
+	key = '&key='+ secrets.googlekey
+	# AIzaSyD3lM-WCdhwJtm3D3KUYNjRs3ySwWW3tm0'
 	search_text = request.POST.get('location_text', '').replace(' ', '+')
 
 	Loc_URL = 'https://maps.googleapis.com/maps/api/geocode/json?address='
@@ -56,25 +58,9 @@ def get_google_bars(coordinates):
 	jsonResponseBars = json.loads(str_responseBars)
 	return jsonResponseBars
 
-	# lst = []
-	# for x, y in enumerate(jsonResponseBars['results']):
-	# 	lat = y['geometry']['location']['lat']
-	# 	lng = y['geometry']['location']['lng']
-	# 	google_id = y['id']
-	# 	name = y['name']
-	# 	if 'opening_hours' in y and 'open_now' in y['opening_hours']:
-	# 		open_now = y['opening_hours']['open_now']
-	# 	place_id = y['place_id']
-	# 	if 'price_level' in y:
-	# 		price_level = y['price_level']
-	# 	if 'rating' in y:
-	# 		rating = y['rating']
-	# 	vicinity = y['vicinity']
-	# 	lst.append([google_id, lat, lng, name, open_now, place_id, price_level, rating, vicinity])
-	# pprint.pprint(lst)
-
-def google_to_model(jsonResponseBars):
-	for x, y in enumerate(jsonResponseBars['results']):
+def google_to_model(bars):
+	lst = []
+	for x, y in enumerate(bars['results']):
 		b = Bar()
 		b.google_id = y['id']
 		b.name = y['name']
@@ -88,7 +74,13 @@ def google_to_model(jsonResponseBars):
 			b.rating = y['rating']
 		if 'opening_hours' in y and 'open_now' in y['opening_hours']:
 			b.open_at_update = y['opening_hours']['open_now']
-		b.save()
+		# b.save()
+		lst.append(b)
+	return lst
+
+def draw_markers(current_bars):
+	for x in current_bars:
+		print(x.google_id)
 
 
 
