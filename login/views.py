@@ -24,17 +24,17 @@ def render_default_home_page(request):
 def render_after_POST(request):
 	coordinates = get_google_coordinates(request)
 	bars = get_google_bars(coordinates)
-	current_bars = google_to_model(bars)
-	draw_markers(current_bars)
+	current_bars_list = google_to_model(bars)
+	marker_coordinates = draw_markers(current_bars_list)
 
 	return render(request, 'home.html', {
 		'new_location_text': coordinates,
-		'zoom': 15
+		'zoom': 15,
+		'markers': marker_coordinates
 		})
 
 def get_google_coordinates(request):
 	key = '&key='+ secrets.googlekey
-	# AIzaSyD3lM-WCdhwJtm3D3KUYNjRs3ySwWW3tm0'
 	search_text = request.POST.get('location_text', '').replace(' ', '+')
 
 	Loc_URL = 'https://maps.googleapis.com/maps/api/geocode/json?address='
@@ -51,18 +51,26 @@ def get_google_coordinates(request):
 
 def get_google_bars(coordinates):
 	nearby_URL1 = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location='
-	nearby_URL2 = '&radius=500&types=bar&key=AIzaSyD3lM-WCdhwJtm3D3KUYNjRs3ySwWW3tm0'
+	nearby_URL2 = '&radius=500&types=bar&key='
+	key = secrets.googlekey
 
-	googleResponseBars = urllib.request.urlopen(nearby_URL1+coordinates+nearby_URL2)
+	googleResponseBars = urllib.request.urlopen(nearby_URL1+coordinates+nearby_URL2+key)
 	str_responseBars = googleResponseBars.read().decode('utf-8')
 	jsonResponseBars = json.loads(str_responseBars)
 	return jsonResponseBars
 
+def check_database_for_bar(current_id):
+		if Bar.objects.filter(google_id=current_id):
+			return True
+		else:
+			return False
+
 def google_to_model(bars):
 	lst = []
 	for x, y in enumerate(bars['results']):
+		current_id = y['id']
 		b = Bar()
-		b.google_id = y['id']
+		b.google_id = current_id
 		b.name = y['name']
 		b.latitude = y['geometry']['location']['lat']
 		b.longitude = y['geometry']['location']['lng']
@@ -74,13 +82,21 @@ def google_to_model(bars):
 			b.rating = y['rating']
 		if 'opening_hours' in y and 'open_now' in y['opening_hours']:
 			b.open_at_update = y['opening_hours']['open_now']
-		# b.save()
+		if check_database_for_bar(current_id) == False:
+			b.save()
 		lst.append(b)
 	return lst
 
-def draw_markers(current_bars):
-	for x in current_bars:
-		print(x.google_id)
+
+
+def draw_markers(current_bars_list):
+	markers = []
+	for x in current_bars_list:
+		q = Bar.objects.get(google_id=x.google_id)
+		marker_coordinates = [q.latitude, q.longitude]
+		markers.append(marker_coordinates)
+	print(markers)
+	return markers
 
 
 

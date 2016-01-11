@@ -11,6 +11,12 @@
 		<script src="https://maps.googleapis.com/maps/api/js"></script>
 		<script>
 			function initialize() {
+				{% if markers %}
+				var markers = {{markers |safe}};
+				{% else %}
+				var markers = [];
+				{% endif %}
+				console.log(markers)
         		var mapCanvas = document.getElementById('map');
         		var mapOptions = {
           			zoom: {{zoom}},
@@ -19,6 +25,13 @@
         		}
         		var map = new google.maps.Map(mapCanvas, mapOptions)
         		map.setCenter(new google.maps.LatLng({{new_location_text}}))
+        		for(i = 0; i < markers.length; i++) {
+        			var position = new google.maps.LatLng(markers[i][0], markers[i][1]);
+        			var marker = new google.maps.Marker({
+        				position: position,
+        				map: map
+        			})
+        		}
       		}
       		google.maps.event.addDomListener(window, 'load', initialize);
 		</script>
