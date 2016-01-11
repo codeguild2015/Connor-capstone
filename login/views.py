@@ -1,11 +1,15 @@
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from login.models import Bar
+
 import urllib.request, json
 import pprint
-from login.models import Bar
 import login.secrets as secrets
+import login.matching_libraries as match
 import datetime
+import tweepy
+from string import ascii_letters, digits
 
 
 
@@ -28,6 +32,7 @@ def render_after_POST(request):
 	bars = get_google_bars(coordinates)
 	current_bars_list = google_to_model(bars)
 	marker_coordinates = draw_markers(current_bars_list)
+	assign_twitter_in_db(current_bars_list)
 
 	return render(request, 'home.html', {
 		'new_location_text': coordinates,
@@ -74,6 +79,7 @@ def google_to_model(bars):
 		b = Bar()
 		b.google_id = current_id
 		b.name = json['name']
+		b.stripped_name = extract_alphanumeric(json['name'].lower())
 		b.latitude = json['geometry']['location']['lat']
 		b.longitude = json['geometry']['location']['lng']
 		if 'vicinity' in json:
@@ -95,17 +101,86 @@ def google_to_model(bars):
 	return lst
 
 def update_bar_in_db(json, current_id):
-	updates = Bar.objects.get(google_id=current_id)
-	updates.updated_date = timezone.now()
+	b = Bar.objects.get(google_id=current_id)
+	b.updated_date = timezone.now()
 	if 'price_level' in json:
-		updates.price_level = json['price_level']
+		b.price_level = json['price_level']
 	if 'rating' in json:
-		updates.rating = json['rating']
+		b.rating = json['rating']
 	if 'opening_hours' in json and 'open_now' in json['opening_hours']:
-		updates.open_at_update = json['opening_hours']['open_now']
-	updates.save()
+		b.open_at_update = json['opening_hours']['open_now']
+	b.save()
+
+def assign_twitter_in_db(current_bars_list):
+	consumer_key = secrets.consumer_key
+	consumer_secret = secrets.consumer_secret
+	access_token = secrets.access_token
+	access_secret = secrets.access_secret
+
+	auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+	auth.set_access_token(access_token, access_secret)
+
+	api = tweepy.API(auth)
+
+	# stripped = []
+	# stripped_plus_bar = []
+	# stripped_plus_pdx = []
+	# for bar in current_bars_list:
+	stripped = Matching(current_bars_list)
+	stripped_plus_bar = Matching(current_bars_list, 'bar')
+		# stripped_plus_bar.append(extract_alphanumeric(bar.name + 'bar').lower())
+		# stripped_plus_pdx.append(extract_alphanumeric(bar.name + 'pdx').lower())
+	# for x in stripped.name.values():
+	# 	print(x.name, x.id)
+	# print(stripped.name, stripped.id)
+	# for x in stripped:
+	# 	print(x.name, x.id)
+	# print(stripped.name)
+	# matches = []
+
+	def verify_stripped(stripped):
+		twitters = api.lookup_users(screen_names=stripped.name)
+		for a, user in enumerate(twitters):
+			for location in match.location:
+				if location in user.location:
+					# pass
+					pp = stripped.name.index(user.screen_name.lower())
+					print(pp, stripped.name[pp], stripped.id[pp])
+					# matches.append([user.location, user.id_str, user.screen_name.lower()])
+
+	# def verify_stripped_plus_bar(stripped_plus_bar):
+	# 	# print(stripped_plus_bar.name)
+	# 	twitters = api.lookup_users(screen_names=stripped_plus_bar.name)
+	# 	for a, user in enumerate(twitters):
+	# 		for location in match.location:
+	# 			if location in user.location:
+	# 				# pass
+	# 				print(stripped_plus_bar.name[a], stripped_plus_bar.id[a])
+					# matches.append([user.location, user.id_str, user.screen_name.lower()])
+
+	# def verify_stripped_plus_bar():
+	# 	twitters = api.lookup_users(screen_names=stripped_plus_bar)
+	# 	for user in twitters:
+	# 		for location in match.location:
+	# 			if location in user.location:
+	# 				matches.append([user.location, user.id_str, user.screen_name.lower()])
+
+	# def verify_stripped_plus_pdx():
+	# 	twitters = api.lookup_users(screen_names=stripped_plus_pdx)
+	# 	for user in twitters:
+	# 		for location in match.location:
+	# 			if location in user.location:
+	# 				matches.append([user.location, user.id_str, user.screen_name.lower()])
 
 
+	verify_stripped(stripped)
+	# verify_stripped_plus_bar(stripped_plus_bar)
+	# verify_stripped_plus_pdx()
+	# print(matches)
+
+
+def extract_alphanumeric(string):
+    return "".join([char for char in string if char in (ascii_letters + digits)])
 
 def draw_markers(current_bars_list):
 	markers = []
@@ -116,20 +191,9 @@ def draw_markers(current_bars_list):
 	return markers
 
 
-
-
-# to pull from DB MAYBE?!
-# class Bar():
-# 	def __init__(self):
-# 		self.gId = Bar.objects.get().gId
-# 		self.name = Bar.objects.get().name
-# 		self.latitude = Bar.objects.get().latitude
-# 		self.longitude = Bar.objects.get().longitude
-# 		self.vicinity = Bar.objects.get().vicinity
-# 		self.price_level = Bar.objects.get().price_level
-# 		self.rating = Bar.objects.get().rating
-# 		self.creation_date = Bar.objects.get().creation_date
-# 		self.updated_date = Bar.objects.get().updated_date
-# 		self.open_at_update = Bar.objects.get().open_at_update
+class Matching():
+	def __init__(self, bar, addition=""):
+		self.name = [extract_alphanumeric(x.name + addition).lower() for x in bar]
+		self.id = [y.google_id for y in bar]
 
 

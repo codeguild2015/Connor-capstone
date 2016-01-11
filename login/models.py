@@ -4,6 +4,7 @@ class Bar(models.Model):
 	id = models.AutoField(primary_key=True)
 	google_id = models.TextField(default='')
 	name = models.TextField(default='')
+	stripped_name = models.TextField(default='')
 	latitude = models.TextField(default='')
 	longitude = models.TextField(default='')
 	vicinity = models.TextField(default='')
