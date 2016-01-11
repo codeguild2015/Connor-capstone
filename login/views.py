@@ -1,9 +1,11 @@
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
 import urllib.request, json
 import pprint
 from login.models import Bar
 import login.secrets as secrets
+import datetime
 
 
 
@@ -51,7 +53,7 @@ def get_google_coordinates(request):
 
 def get_google_bars(coordinates):
 	nearby_URL1 = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location='
-	nearby_URL2 = '&radius=500&types=bar&key='
+	nearby_URL2 = '&radius=600&types=bar&key='
 	key = secrets.googlekey
 
 	googleResponseBars = urllib.request.urlopen(nearby_URL1+coordinates+nearby_URL2+key)
@@ -67,25 +69,41 @@ def check_database_for_bar(current_id):
 
 def google_to_model(bars):
 	lst = []
-	for x, y in enumerate(bars['results']):
-		current_id = y['id']
+	for x, json in enumerate(bars['results']):
+		current_id = json['id']
 		b = Bar()
 		b.google_id = current_id
-		b.name = y['name']
-		b.latitude = y['geometry']['location']['lat']
-		b.longitude = y['geometry']['location']['lng']
-		if 'vicinity' in y:
-			b.vicinity = y['vicinity']
-		if 'price_level' in y:
-			b.price_level = y['price_level']
-		if 'rating' in y:
-			b.rating = y['rating']
-		if 'opening_hours' in y and 'open_now' in y['opening_hours']:
-			b.open_at_update = y['opening_hours']['open_now']
-		if check_database_for_bar(current_id) == False:
-			b.save()
+		b.name = json['name']
+		b.latitude = json['geometry']['location']['lat']
+		b.longitude = json['geometry']['location']['lng']
+		if 'vicinity' in json:
+			b.vicinity = json['vicinity']
+		if 'price_level' in json:
+			b.price_level = json['price_level']
+		if 'rating' in json:
+			b.rating = json['rating']
+		if 'opening_hours' in json and 'open_now' in json['opening_hours']:
+			b.open_at_update = json['opening_hours']['open_now']
+		b.creation_date = timezone.now()
+		b.updated_date = timezone.now()
+
+		if check_database_for_bar(current_id) == False: #means Bar isn't in DB
+			b.save()  
+		else:
+			update_bar_in_db(json, current_id)
 		lst.append(b)
 	return lst
+
+def update_bar_in_db(json, current_id):
+	updates = Bar.objects.get(google_id=current_id)
+	updates.updated_date = timezone.now()
+	if 'price_level' in json:
+		updates.price_level = json['price_level']
+	if 'rating' in json:
+		updates.rating = json['rating']
+	if 'opening_hours' in json and 'open_now' in json['opening_hours']:
+		updates.open_at_update = json['opening_hours']['open_now']
+	updates.save()
 
 
 
@@ -95,7 +113,6 @@ def draw_markers(current_bars_list):
 		q = Bar.objects.get(google_id=x.google_id)
 		marker_coordinates = [q.latitude, q.longitude]
 		markers.append(marker_coordinates)
-	print(markers)
 	return markers
 
 
