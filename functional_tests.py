@@ -16,8 +16,8 @@ class NewVisitorTest(unittest.TestCase):
 		self.browser = webdriver.Firefox()
 		self.browser.implicitly_wait(3)
 
-	# def tearDown(self):
-	# 	self.browser.quit()	
+	def tearDown(self):
+		self.browser.quit()	
 
 	def test_lands_on_home_page(self):
 		#Thunder goes online to try the new bar app
@@ -48,10 +48,10 @@ class NewVisitorTest(unittest.TestCase):
 		location_inputbox.send_keys('4534 SE Belmont St, Portland, OR 97215')
 
 		#When he hits enter, the page lists the search query in the main div
-		location_inputbox.send_keys(Keys.ENTER)
+		# location_inputbox.send_keys(Keys.ENTER)
 
-		import time
-		time.sleep(5)
+		# import time
+		# time.sleep(5)
 
 		# self.assertIn('4534 SE Belmont St, Portland, OR 97215', maindiv)
 

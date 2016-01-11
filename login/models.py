@@ -1,21 +1,19 @@
 from django.db import models
 
-# class Item(models.Model):
-# 	text = models.TextField(default='')
-
 class Bar(models.Model):
-	gId = models.TextField(primary_key=True, max_length=500)
-	name = models.TextField(required=True, max_length=500)
-	latitude = models.IntegerField(required=True, max_length=500)
-	longitude = models.IntegerField(required=True, max_length=500)
-	vicinity = models.TextField(required=True, max_length=500)
-	price_level = models.IntegerField(required=True, max_length=500)
-	rating = models.IntegerField(required=True, max_length=500)
-	creation_date = models.Date(, max_length=500) # Dunno if that's what it's called
-	updated_date = models.Date(, max_length=500)
-	open_at_update = models.TextField(, max_length=500)
+	id = models.TextField(primary_key=True)
+	google_id = models.TextField(default='')
+	name = models.TextField(default='')
+	latitude = models.IntegerField(null=True)
+	longitude = models.IntegerField(null=True)
+	vicinity = models.TextField(default='')
+	price_level = models.IntegerField(null=True)
+	rating = models.IntegerField(null=True)
+	# creation_date = models.DateTimeField(null=True) # Dunno if that's what it's called
+	# updated_date = models.DateTimeField(null=True)
+	open_at_update = models.TextField(default='')
 
 
-# current_bar = Bar()
+# current_bar = Bar(default='')
 # current_bar.address = "123 Shithouse lane"
-# current_bar.save()
+# current_bar.save(default='')
