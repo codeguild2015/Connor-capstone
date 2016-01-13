@@ -3,14 +3,17 @@ from django.shortcuts import render
 from django.utils import timezone
 from login.models import Bar
 
-import urllib.request, json
-import pprint
 import login.secrets as secrets
 import login.matching_libraries as match
+
+import urllib.request, json
+import requests
+from requests.auth import HTTPBasicAuth
+
+import pprint
 import datetime
 import tweepy
 from string import ascii_letters, digits
-
 
 
 # Create your views here.
@@ -31,8 +34,16 @@ def render_after_POST(request):
 	coordinates = get_google_coordinates(request)
 	bars = get_google_bars(coordinates)
 	current_bars_list = google_to_model(bars)
+	
+
+	possible_twitters = check_database_for_bar(current_bars_list)
+	existing_accounts = verify_possible_twitters(possible_twitters)
+	get_twitter_match_object(possible_twitters, existing_accounts)
 	marker_coordinates = draw_markers(current_bars_list)
-	assign_twitter_in_db(current_bars_list)
+
+	# possible_twitters = get_list_of_possible_twitters(current_bars_list)
+	# existing_accounts = verify_possible_twitters(possible_twitters)
+	# get_twitter_match_object(possible_twitters, existing_accounts)
 
 	return render(request, 'home.html', {
 		'new_location_text': coordinates,
@@ -68,10 +79,9 @@ def get_google_bars(coordinates):
 
 
 def google_to_model(bars):
-	current_bars = [CurrentBar(bar) for bar in bars['results']]
-	for bar in current_bars:
-		print(bar.name)
-		check_database_for_bar(bar)
+	current_bars = [CurrentBar(bar) for bar in bars['results']] 
+	# current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
+	# check_database_for_bar(current_bars)
 	return current_bars
 
 class CurrentBar():
@@ -94,13 +104,21 @@ class CurrentBar():
 def extract_alphanumeric(string):
     return "".join([char for char in string if char in (ascii_letters + digits)])
 
-def check_database_for_bar(current_bar):
-	if Bar.objects.filter(google_id=current_bar.google_id):
-		update_bar_in_db(current_bar)
-	else:
-		create_bar_in_db(current_bar)
+def check_database_for_bar(current_bars):
+	bing_results = []
+	for current_bar in current_bars:
+		# print(current_bar.name)
+		if Bar.objects.filter(google_id=current_bar.google_id):
+			update_bar_in_db(current_bar)
+		else:
+			create_bar_in_db(current_bar)
+			bing_results.append(TwitterAccount(bing_search(current_bar), current_bar.google_id))
+	# for item in bing_results:
+	# 	print(item.name, item.google_id)
+	return bing_results
 
 def create_bar_in_db(current_bar):
+	# print('hello')
 	b = Bar()
 	b.google_id = current_bar.google_id
 	b.name = current_bar.name
@@ -132,6 +150,26 @@ def update_bar_in_db(current_bar):
 		b.open_at_update = current_bar.open_at_update
 	b.save()
 
+def bing_search(current_bar):
+
+	API_KEY = 'q0D7TMvQsCC3x+s8+QdD++9OK+3eUN4QuodsL3oK6Sc'
+	user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36"
+	headers= {'User-Agent': user_agent}
+	auth = HTTPBasicAuth(API_KEY, API_KEY)
+
+	URL1 = "https://api.datamarket.azure.com/Bing/Search/v1/Web?Query=%27"
+	query = (extract_alphanumeric_whitespace(current_bar.name)).replace(' ', '%20')
+	URL2 = "%20Portland%20site%3Atwitter.com%27&$top=1&$format=json"
+	url = URL1 + query + URL2
+
+	response_data = requests.get(url, headers=headers, auth=auth)
+	bing_result = response_data.json()
+	if bing_result['d']['results']:
+		return bing_result['d']['results'][0]['Url'].rsplit('/', 1)[-1]
+
+def extract_alphanumeric_whitespace(string):
+    return "".join([char for char in string if char in (ascii_letters + digits + ' ')])
+
 def draw_markers(current_bars_list):
 	markers = []
 	for x in current_bars_list:
@@ -140,7 +178,25 @@ def draw_markers(current_bars_list):
 		markers.append(marker_coordinates)
 	return markers
 
-def assign_twitter_in_db(current_bars_list):
+# def get_list_of_possible_twitters(current_bars_list):
+# 	possible_twitters = []
+# 	for bar in current_bars_list:
+# 		possible_twitters.append(TwitterMatch(bar))
+# 		possible_twitters.append(TwitterMatch(bar, 'bar'))
+# 		possible_twitters.append(TwitterMatch(bar, 'pdx'))
+# 	return possible_twitters
+
+# class TwitterMatching():
+# 	def __init__(self, bar, addition=""):
+# 		self.name = bar.stripped_name + addition
+# 		self.id = bar.google_id
+
+class TwitterAccount():
+	def __init__(self, twitter, google_id):
+		self.name = twitter
+		self.google_id = google_id
+
+def verify_possible_twitters(possible_twitters): # NOT GETTING ANYTHING PASSED IN
 	consumer_key = secrets.consumer_key
 	consumer_secret = secrets.consumer_secret
 	access_token = secrets.access_token
@@ -151,68 +207,51 @@ def assign_twitter_in_db(current_bars_list):
 
 	api = tweepy.API(auth)
 
-	# stripped = []
-	# stripped_plus_bar = []
-	# stripped_plus_pdx = []
-	# for bar in current_bars_list:
-	stripped = Matching(current_bars_list)
-	stripped_plus_bar = Matching(current_bars_list, 'bar')
-		# stripped_plus_bar.append(extract_alphanumeric(bar.name + 'bar').lower())
-		# stripped_plus_pdx.append(extract_alphanumeric(bar.name + 'pdx').lower())
-	# for x in stripped.name.values():
-	# 	print(x.name, x.id)
-	# print(stripped.name, stripped.id)
-	# for x in stripped:
-	# 	print(x.name, x.id)
-	# print(stripped.name)
-	# matches = []
+	verified_accounts = []
+	# for twitter in possible_twitters:
+	# 	print(twitter.name, twitter.google)
+	# print(possible_twitters)
+	# for item in possible_twitters:
+	# 	print(item.name)
+	names = [twitter.name for twitter in possible_twitters]
+	# print(names)
+	twitters = api.lookup_users(screen_names=names)
+	for user in twitters:
+		# for location in match.location:
+		# if location in user.location.lower():
+		if any(location in user.location.lower() for location in match.location):
+			verified_accounts.append(user.screen_name)
+	# print(verified_accounts)
+	return verified_accounts
 
-	def verify_stripped(stripped):
-		twitters = api.lookup_users(screen_names=stripped.name)
-		for a, user in enumerate(twitters):
-			for location in match.location:
-				if location in user.location:
-					# pass
-					pp = stripped.name.index(user.screen_name.lower())
-					# print(pp, stripped.name[pp], stripped.id[pp])
-					# matches.append([user.location, user.id_str, user.screen_name.lower()])
+# def verify_possible_twitters(possible_twitters):
+# 	consumer_key = secrets.consumer_key
+# 	consumer_secret = secrets.consumer_secret
+# 	access_token = secrets.access_token
+# 	access_secret = secrets.access_secret
 
-	# def verify_stripped_plus_bar(stripped_plus_bar):
-	# 	# print(stripped_plus_bar.name)
-	# 	twitters = api.lookup_users(screen_names=stripped_plus_bar.name)
-	# 	for a, user in enumerate(twitters):
-	# 		for location in match.location:
-	# 			if location in user.location:
-	# 				# pass
-	# 				print(stripped_plus_bar.name[a], stripped_plus_bar.id[a])
-					# matches.append([user.location, user.id_str, user.screen_name.lower()])
+# 	auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+# 	auth.set_access_token(access_token, access_secret)
 
-	# def verify_stripped_plus_bar():
-	# 	twitters = api.lookup_users(screen_names=stripped_plus_bar)
-	# 	for user in twitters:
-	# 		for location in match.location:
-	# 			if location in user.location:
-	# 				matches.append([user.location, user.id_str, user.screen_name.lower()])
+# 	api = tweepy.API(auth)
 
-	# def verify_stripped_plus_pdx():
-	# 	twitters = api.lookup_users(screen_names=stripped_plus_pdx)
-	# 	for user in twitters:
-	# 		for location in match.location:
-	# 			if location in user.location:
-	# 				matches.append([user.location, user.id_str, user.screen_name.lower()])
+# 	verified_accounts = []
+# 	names = [bar.name for bar in possible_twitters]
+# 	twitters = api.lookup_users(screen_names=names)
+# 	for user in twitters:
+# 		for location in match.location:
+# 			if location in user.location:
+# 				verified_accounts.append(user.screen_name.lower())	
+# 	return verified_accounts
 
+def get_twitter_match_object(possible_twitters, verified_accounts):
+	matches = []
+	print(verified_accounts)
+	for item in possible_twitters:
+		print(item.name)
+		if item.name in verified_accounts:
+			matches.append([item.name, item.google_id])
+	print(matches)
 
-	verify_stripped(stripped)
-	# verify_stripped_plus_bar(stripped_plus_bar)
-	# verify_stripped_plus_pdx()
-	# print(matches)
-
-
-
-
-class Matching():
-	def __init__(self, bar, addition=""):
-		self.name = [extract_alphanumeric(x.name + addition).lower() for x in bar]
-		self.id = [y.google_id for y in bar]
 
 
