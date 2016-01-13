@@ -14,5 +14,5 @@ class Bar(models.Model):
 	updated_date = models.DateTimeField(null=True)
 	open_at_update = models.TextField(default='')
 
-class Twitter(models.Model):
-	id = models.AutoField(primary_key=True)
+# class Twitter(models.Model):
+# 	id = models.AutoField(primary_key=True)

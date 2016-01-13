@@ -51,7 +51,7 @@ def get_google_coordinates(request):
 
 	latitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lat'])
 	longitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lng'])
-	# latitude = str(45.5164111)
+	# latitude = str(45.5164111) # hard coded latitude and longitude used to limit API calls
 	# longitude = str(-122.6156611)
 	coordinates = latitude + ',' + longitude
 	return coordinates
@@ -66,50 +66,79 @@ def get_google_bars(coordinates):
 	jsonResponseBars = json.loads(str_responseBars)
 	return jsonResponseBars
 
-def check_database_for_bar(current_id):
-		if Bar.objects.filter(google_id=current_id):
-			return True
-		else:
-			return False
 
 def google_to_model(bars):
-	lst = []
-	for x, json in enumerate(bars['results']):
-		current_id = json['id']
-		b = Bar()
-		b.google_id = current_id
-		b.name = json['name']
-		b.stripped_name = extract_alphanumeric(json['name'].lower())
-		b.latitude = json['geometry']['location']['lat']
-		b.longitude = json['geometry']['location']['lng']
-		if 'vicinity' in json:
-			b.vicinity = json['vicinity']
-		if 'price_level' in json:
-			b.price_level = json['price_level']
-		if 'rating' in json:
-			b.rating = json['rating']
-		if 'opening_hours' in json and 'open_now' in json['opening_hours']:
-			b.open_at_update = json['opening_hours']['open_now']
-		b.creation_date = timezone.now()
-		b.updated_date = timezone.now()
+	current_bars = [CurrentBar(bar) for bar in bars['results']]
+	for bar in current_bars:
+		print(bar.name)
+		check_database_for_bar(bar)
+	return current_bars
 
-		if check_database_for_bar(current_id) == False: #means Bar isn't in DB
-			b.save()  
-		else:
-			update_bar_in_db(json, current_id)
-		lst.append(b)
-	return lst
+class CurrentBar():
+	def __init__(self, bar):
+		self.google_id = bar['id']
+		self.name = bar['name']
+		self.stripped_name = extract_alphanumeric(bar['name'].lower())
+		self.latitude = bar['geometry']['location']['lat']
+		self.longitude = bar['geometry']['location']['lng']
+		if 'vicinity' in bar:
+			self.vicinity = bar['vicinity']
+		if 'price_level' in bar:
+			self.price_level = bar['price_level']
+		if 'rating' in bar:
+			self.rating = bar['rating']
+		self.accessed_date = timezone.now()
+		if 'opening_hours' in bar and 'open_now' in bar['opening_hours']:
+			self.open_at_update = bar['opening_hours']['open_now']
 
-def update_bar_in_db(json, current_id):
-	b = Bar.objects.get(google_id=current_id)
-	b.updated_date = timezone.now()
-	if 'price_level' in json:
-		b.price_level = json['price_level']
-	if 'rating' in json:
-		b.rating = json['rating']
-	if 'opening_hours' in json and 'open_now' in json['opening_hours']:
-		b.open_at_update = json['opening_hours']['open_now']
+def extract_alphanumeric(string):
+    return "".join([char for char in string if char in (ascii_letters + digits)])
+
+def check_database_for_bar(current_bar):
+	if Bar.objects.filter(google_id=current_bar.google_id):
+		update_bar_in_db(current_bar)
+	else:
+		create_bar_in_db(current_bar)
+
+def create_bar_in_db(current_bar):
+	b = Bar()
+	b.google_id = current_bar.google_id
+	b.name = current_bar.name
+	b.stripped_name = current_bar.stripped_name
+	b.latitude = current_bar.latitude
+	b.longitude = current_bar.longitude
+	if hasattr(current_bar, 'vicinity'):
+		b.vicinity = current_bar.vicinity
+	if hasattr(current_bar, 'price_level'):
+		b.price_level = current_bar.price_level
+	if hasattr(current_bar, 'rating'):
+		b.rating = current_bar.rating
+	b.creation_date = timezone.now()
+	if hasattr(current_bar, 'open_at_update'):
+		b.open_at_update = current_bar.open_at_update
 	b.save()
+
+
+def update_bar_in_db(current_bar):
+	b = Bar.objects.get(google_id=current_bar.google_id)
+	if hasattr(current_bar, 'vicinity'):
+		b.vicinity = current_bar.vicinity
+	if hasattr(current_bar, 'price_level'):
+		b.price_level = current_bar.price_level
+	if hasattr(current_bar, 'rating'):
+		b.rating = current_bar.rating
+	b.updated_date = timezone.now()
+	if hasattr(current_bar, 'open_at_update'):
+		b.open_at_update = current_bar.open_at_update
+	b.save()
+
+def draw_markers(current_bars_list):
+	markers = []
+	for x in current_bars_list:
+		q = Bar.objects.get(google_id=x.google_id)
+		marker_coordinates = [q.latitude, q.longitude]
+		markers.append(marker_coordinates)
+	return markers
 
 def assign_twitter_in_db(current_bars_list):
 	consumer_key = secrets.consumer_key
@@ -145,7 +174,7 @@ def assign_twitter_in_db(current_bars_list):
 				if location in user.location:
 					# pass
 					pp = stripped.name.index(user.screen_name.lower())
-					print(pp, stripped.name[pp], stripped.id[pp])
+					# print(pp, stripped.name[pp], stripped.id[pp])
 					# matches.append([user.location, user.id_str, user.screen_name.lower()])
 
 	# def verify_stripped_plus_bar(stripped_plus_bar):
@@ -179,16 +208,6 @@ def assign_twitter_in_db(current_bars_list):
 	# print(matches)
 
 
-def extract_alphanumeric(string):
-    return "".join([char for char in string if char in (ascii_letters + digits)])
-
-def draw_markers(current_bars_list):
-	markers = []
-	for x in current_bars_list:
-		q = Bar.objects.get(google_id=x.google_id)
-		marker_coordinates = [q.latitude, q.longitude]
-		markers.append(marker_coordinates)
-	return markers
 
 
 class Matching():
