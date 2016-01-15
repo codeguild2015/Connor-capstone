@@ -1,1 +1,1 @@
-location = ['oregon', 'or', 'portland', 'p-town', 'pdx']
+location = ['oregon', 'or', 'portland', 'p-town', 'pdx', 'rip city', 'ripcity', 'portland, or', 'portland, oregon']

@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
-from login.models import Bar
+from login.models import Bar, Twitter
 
 import login.secrets as secrets
 import login.matching_libraries as match
@@ -15,6 +15,15 @@ import datetime
 import tweepy
 from string import ascii_letters, digits
 
+consumer_key = secrets.consumer_key
+consumer_secret = secrets.consumer_secret
+access_token = secrets.access_token
+access_secret = secrets.access_secret
+
+auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+auth.set_access_token(access_token, access_secret)
+
+API = tweepy.API(auth)
 
 # Create your views here.
 def home_page(request):
@@ -33,17 +42,16 @@ def render_default_home_page(request):
 def render_after_POST(request):
 	coordinates = get_google_coordinates(request)
 	bars = get_google_bars(coordinates)
-	current_bars_list = google_to_model(bars)
+	current_bars_list = bars_to_class(bars)
+	check_database_for_bar(current_bars_list)
 	
+	# possible_twitters = check_database_for_bar(current_bars_list)
+	# existing_accounts = verify_possible_twitters(possible_twitters)
+	# matched_twitters = get_twitter_match_object(possible_twitters, existing_accounts)
+	# get_twitter_statuses(matched_twitters)
 
-	possible_twitters = check_database_for_bar(current_bars_list)
-	existing_accounts = verify_possible_twitters(possible_twitters)
-	get_twitter_match_object(possible_twitters, existing_accounts)
 	marker_coordinates = draw_markers(current_bars_list)
 
-	# possible_twitters = get_list_of_possible_twitters(current_bars_list)
-	# existing_accounts = verify_possible_twitters(possible_twitters)
-	# get_twitter_match_object(possible_twitters, existing_accounts)
 
 	return render(request, 'home.html', {
 		'new_location_text': coordinates,
@@ -78,10 +86,9 @@ def get_google_bars(coordinates):
 	return jsonResponseBars
 
 
-def google_to_model(bars):
-	current_bars = [CurrentBar(bar) for bar in bars['results']] 
-	# current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
-	# check_database_for_bar(current_bars)
+def bars_to_class(bars):
+	# current_bars = [CurrentBar(bar) for bar in bars['results']] 
+	current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
 	return current_bars
 
 class CurrentBar():
@@ -104,21 +111,32 @@ class CurrentBar():
 def extract_alphanumeric(string):
     return "".join([char for char in string if char in (ascii_letters + digits)])
 
+# def check_database_for_bar(current_bars):
+# 	bing_results = []
+# 	for current_bar in current_bars:
+# 		if Bar.objects.filter(google_id=current_bar.google_id):
+# 			update_bar_in_db(current_bar)
+# 		else:
+# 			create_bar_in_db(current_bar)
+# 			bing_results.append(TwitterAccount(bing_search(current_bar), current_bar.google_id))
+# 	if bing_results:
+
 def check_database_for_bar(current_bars):
-	bing_results = []
 	for current_bar in current_bars:
-		# print(current_bar.name)
 		if Bar.objects.filter(google_id=current_bar.google_id):
 			update_bar_in_db(current_bar)
+			# update_tweets_in_db()
 		else:
 			create_bar_in_db(current_bar)
-			bing_results.append(TwitterAccount(bing_search(current_bar), current_bar.google_id))
-	# for item in bing_results:
-	# 	print(item.name, item.google_id)
-	return bing_results
+			twitter_name = bing_search(current_bar)
+			twitter_info = API.user_timeline(screen_name=twitter_name, count=2)
+			if verify_twitter(twitter_info) and twitter_info:
+				create_twitter_in_db(twitter_info, current_bar)
+				# create_tweets_in_db(twitter_info, current_bar)
+
+
 
 def create_bar_in_db(current_bar):
-	# print('hello')
 	b = Bar()
 	b.google_id = current_bar.google_id
 	b.name = current_bar.name
@@ -165,7 +183,7 @@ def bing_search(current_bar):
 	response_data = requests.get(url, headers=headers, auth=auth)
 	bing_result = response_data.json()
 	if bing_result['d']['results']:
-		return bing_result['d']['results'][0]['Url'].rsplit('/', 1)[-1]
+		return bing_result['d']['results'][0]['Url'].rsplit('/', 1)[-1].lower()
 
 def extract_alphanumeric_whitespace(string):
     return "".join([char for char in string if char in (ascii_letters + digits + ' ')])
@@ -178,80 +196,87 @@ def draw_markers(current_bars_list):
 		markers.append(marker_coordinates)
 	return markers
 
-# def get_list_of_possible_twitters(current_bars_list):
-# 	possible_twitters = []
-# 	for bar in current_bars_list:
-# 		possible_twitters.append(TwitterMatch(bar))
-# 		possible_twitters.append(TwitterMatch(bar, 'bar'))
-# 		possible_twitters.append(TwitterMatch(bar, 'pdx'))
-# 	return possible_twitters
+# class TwitterAccount():
+# 	def __init__(self, twitter, google_id):
+# 		self.name = twitter
+# 		self.google_id = google_id
 
-# class TwitterMatching():
-# 	def __init__(self, bar, addition=""):
-# 		self.name = bar.stripped_name + addition
-# 		self.id = bar.google_id
-
-class TwitterAccount():
-	def __init__(self, twitter, google_id):
-		self.name = twitter
-		self.google_id = google_id
-
-def verify_possible_twitters(possible_twitters): # NOT GETTING ANYTHING PASSED IN
-	consumer_key = secrets.consumer_key
-	consumer_secret = secrets.consumer_secret
-	access_token = secrets.access_token
-	access_secret = secrets.access_secret
-
-	auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-	auth.set_access_token(access_token, access_secret)
-
-	api = tweepy.API(auth)
-
-	verified_accounts = []
-	# for twitter in possible_twitters:
-	# 	print(twitter.name, twitter.google)
-	# print(possible_twitters)
-	# for item in possible_twitters:
-	# 	print(item.name)
-	names = [twitter.name for twitter in possible_twitters]
-	# print(names)
-	twitters = api.lookup_users(screen_names=names)
-	for user in twitters:
-		# for location in match.location:
-		# if location in user.location.lower():
-		if any(location in user.location.lower() for location in match.location):
-			verified_accounts.append(user.screen_name)
-	# print(verified_accounts)
-	return verified_accounts
-
-# def verify_possible_twitters(possible_twitters):
-# 	consumer_key = secrets.consumer_key
-# 	consumer_secret = secrets.consumer_secret
-# 	access_token = secrets.access_token
-# 	access_secret = secrets.access_secret
-
-# 	auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-# 	auth.set_access_token(access_token, access_secret)
-
-# 	api = tweepy.API(auth)
-
+# def verify_possible_twitters(possible_twitters): 
 # 	verified_accounts = []
-# 	names = [bar.name for bar in possible_twitters]
-# 	twitters = api.lookup_users(screen_names=names)
+# 	names = [twitter.name for twitter in possible_twitters]
+# 	twitters = API.lookup_users(screen_names=names)
 # 	for user in twitters:
-# 		for location in match.location:
-# 			if location in user.location:
-# 				verified_accounts.append(user.screen_name.lower())	
+# 		if any(location in user.location.lower() for location in match.location): 
+# 			verified_accounts.append(user.screen_name.lower())
 # 	return verified_accounts
 
-def get_twitter_match_object(possible_twitters, verified_accounts):
-	matches = []
-	print(verified_accounts)
-	for item in possible_twitters:
-		print(item.name)
-		if item.name in verified_accounts:
-			matches.append([item.name, item.google_id])
-	print(matches)
+	
 
+# def get_twitter_match_object(possible_twitters, verified_accounts):
+# 	matches = []
+# 	for item in possible_twitters:
+# 		if item.name in verified_accounts:
+# 			matches.append(item)
+# 	return matches
+
+def verify_twitter(twitter_info):
+	if any(location in twitter_info[0].user.location for location in match.location):
+		return True
+	else:
+		return False
+
+def create_twitter_in_db(twitter, current_bar):
+	t = Twitter()
+	t.google_id = current_bar.google_id
+	t.screen_name = twitter[0].user.screen_name
+	t.created_at = twitter[0].user.created_at
+	try:
+		t.location = twitter[0].user.location
+	except:
+		pass
+	try:
+		t.profile_image = twitter[0].user.profile_image_url_https
+	except:
+		pass
+	try:
+		t.profile_banner = twitter[0].user.profile_banner_url
+	except:
+		pass
+	try:
+		t.profile_link_color = twitter[0].user.profile_link_color
+	except:
+		pass
+	try:
+		t.website = twitter[0].user.entities['url']['urls'][0]['expanded_url']
+	except:
+		pass
+	t.save()
+
+	# print(current_bar.google_id)
+	# print(twitter[0].user.screen_name)
+	# print(twitter[0].user.location)
+
+
+
+# def get_twitter_statuses(matched_twitters):
+# 	for item in matched_twitters:
+# 		status = API.user_timeline(screen_name=item.name, count=2)
+# 		pprint.pprint(vars(status[0]))
+# 		#user
+# 		created_at = status[0].user.created_at
+# 		screen_name = status[0].user.screen_name
+# 		name = status[0].user.name
+# 		profile_image = status[0].user.profile_image_url_https  #_bigger
+# 		profile_banner = status[0].user.profile_banner_url #300x100
+# 		profile_link_color = status[0].user.profile_link_color 
+# 		profile_sidebar_border_color = status[0].user.profile_sidebar_border_color
+# 		display_url = status[0].user.entities['url']['urls'][0]['display_url']
+# 		expaned_url = status[0].user.entities['url']['urls'][0]['expanded_url']
+# 		location = status[0].user.location
+
+# 		#statuses
+# 		created_at = status[0].created_at
+# 		text = status[0].text
+# 		url1 = status[0].entities['urls'][0]['expaned_url']
 
 
