@@ -9,8 +9,6 @@ import login.matching_libraries as match
 import urllib.request, json
 import requests
 from requests.auth import HTTPBasicAuth
-
-import pprint
 import datetime
 import tweepy
 from string import ascii_letters, digits
@@ -61,10 +59,9 @@ def get_google_coordinates(request):
 	str_responseLoc = googleResponseLoc.read().decode('utf-8') #convert googleResponse to be readable
 	jsonResponseLoc = json.loads(str_responseLoc)
 
+
 	latitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lat'])
 	longitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lng'])
-	# latitude = str(45.5164111) # hard coded latitude and longitude used to limit API calls
-	# longitude = str(-122.6156611)
 	coordinates = latitude + ',' + longitude
 	return coordinates
 
@@ -109,9 +106,9 @@ def extract_alphanumeric(string):
 def check_database_for_bar(current_bars):
 	for current_bar in current_bars:
 		if Bar.objects.filter(google_id=current_bar.google_id):
-			# compare_date_time()
+			# compare_date_time() MAKE
 			update_bar_in_db(current_bar)
-			# update_tweets_in_db(current_bar)
+			# update_tweets_in_db(current_bar) MAKE
 		else:
 			create_bar_in_db(current_bar)
 
@@ -166,11 +163,6 @@ def create_twitter_in_db(current_bar_id, twitter):
 		t.statuses = tweets
 	t.save()
 
-# def create_tweets_in_db(twitter_info, current_bar):
-
-
-# 			if twitter:
-# 				twitter_info = API.user_timeline(screen_name=twitter.screen_name)
 
 def create_bar_in_db(current_bar):
 	b = Bar()
@@ -230,7 +222,6 @@ def draw_markers(current_bars_list, request):
 	green = 'https://storage.googleapis.com/support-kms-prod/SNP_2752129_en_v0'
 	yellow = 'https://storage.googleapis.com/support-kms-prod/SNP_2752063_en_v0'
 	input_ids = request.POST.getlist('inputs')
-	print(input_ids)
 	for bar in current_bars_list:
 		b = Bar.objects.get(google_id=bar.google_id)
 		try: 
@@ -238,35 +229,15 @@ def draw_markers(current_bars_list, request):
 			truth = False
 			for item in input_ids:
 				if item in t.tweet_attributes:
-					markers.append([b.latitude, b.longitude, '/static/'+item+'.png'])
+					marker = '/static/' + item + '.png'
 					truth = True
 					break
 			if truth == False:
-				markers.append([b.latitude, b.longitude, green])
+				marker = green
 		except:
-			markers.append([b.latitude, b.longitude, red])
+			marker = red
+		markers.append([b.latitude, b.longitude, b.name, marker])
 	return markers
-
-
-	# for x in current_bars_list:
-	# 	q = Bar.objects.get(google_id=x.google_id)
-
-
-
-		# try:
-		# 	t = Twitter.objects.get(google_id=x.google_id)
-		# except:
-		# 	t = None
-		# if t:
-		# 	if t.tweet_attributes:
-		# 		marker_coordinates = [q.latitude, q.longitude, green]
-		# 	else:
-		# 		marker_coordinates = [q.latitude, q.longitude, yellow]
-		# else:
-		# 	marker_coordinates = [q.latitude, q.longitude, red]
-		# markers.append(marker)
-	# return markers
-
 
 def verify_twitter(twitter_info):
 	if any(location in twitter_info[0].user.location for location in match.location):
@@ -274,32 +245,5 @@ def verify_twitter(twitter_info):
 	else:
 		return False
 
-
-
-
-
-# 2661f5
-
-# def get_twitter_statuses(matched_twitters):
-# 	for item in matched_twitters:
-# 		status = API.user_timeline(screen_name=item.name, count=2)
-# 		pprint.pprint(vars(status[0]))
-# 		#user
-# 		created_at = status[0].user.created_at
-# 		screen_name = status[0].user.screen_name
-# 		name = status[0].user.name
-# 		profile_image = status[0].user.profile_image_url_https  #_bigger
-# 		profile_banner = status[0].user.profile_banner_url #300x100
-# 		profile_link_color = status[0].user.profile_link_color 
-# 		profile_sidebar_border_color = status[0].user.profile_sidebar_border_color
-# 		display_url = status[0].user.entities['url']['urls'][0]['display_url']
-# 		expaned_url = status[0].user.entities['url']['urls'][0]['expanded_url']
-# 		location = status[0].user.location
-
-# 		#statuses
-# 		created_at = status[0].created_at
-# 		text = status[0].text
-# 		url1 = status[0].entities['urls'][0]['expanded_url']
-		# extended_entities = status[0].extended_entities['media'][0]['display_url']
 
 
