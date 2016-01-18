@@ -25,7 +25,6 @@ auth.set_access_token(access_token, access_secret)
 
 API = tweepy.API(auth)
 
-# Create your views here.
 def home_page(request):
 	if request.method == 'POST':
 		return render_after_POST(request)
@@ -44,13 +43,7 @@ def render_after_POST(request):
 	bars = get_google_bars(coordinates)
 	current_bars_list = bars_to_class(bars)
 	check_database_for_bar(current_bars_list)
-	
-	# possible_twitters = check_database_for_bar(current_bars_list)
-	# existing_accounts = verify_possible_twitters(possible_twitters)
-	# matched_twitters = get_twitter_match_object(possible_twitters, existing_accounts)
-	# get_twitter_statuses(matched_twitters)
-
-	marker_coordinates = draw_markers(current_bars_list)
+	marker_coordinates = draw_markers(current_bars_list, request)
 
 
 	return render(request, 'home.html', {
@@ -87,8 +80,8 @@ def get_google_bars(coordinates):
 
 
 def bars_to_class(bars):
-	# current_bars = [CurrentBar(bar) for bar in bars['results']] 
-	current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
+	current_bars = [CurrentBar(bar) for bar in bars['results']] 
+	# current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
 	return current_bars
 
 class CurrentBar():
@@ -111,30 +104,73 @@ class CurrentBar():
 def extract_alphanumeric(string):
     return "".join([char for char in string if char in (ascii_letters + digits)])
 
-# def check_database_for_bar(current_bars):
-# 	bing_results = []
-# 	for current_bar in current_bars:
-# 		if Bar.objects.filter(google_id=current_bar.google_id):
-# 			update_bar_in_db(current_bar)
-# 		else:
-# 			create_bar_in_db(current_bar)
-# 			bing_results.append(TwitterAccount(bing_search(current_bar), current_bar.google_id))
-# 	if bing_results:
+
 
 def check_database_for_bar(current_bars):
 	for current_bar in current_bars:
 		if Bar.objects.filter(google_id=current_bar.google_id):
+			# compare_date_time()
 			update_bar_in_db(current_bar)
-			# update_tweets_in_db()
+			# update_tweets_in_db(current_bar)
 		else:
 			create_bar_in_db(current_bar)
+
 			twitter_name = bing_search(current_bar)
-			twitter_info = API.user_timeline(screen_name=twitter_name, count=2)
-			if verify_twitter(twitter_info) and twitter_info:
-				create_twitter_in_db(twitter_info, current_bar)
-				# create_tweets_in_db(twitter_info, current_bar)
+			twitter = API.user_timeline(screen_name=twitter_name, count=2)
+			if twitter and verify_twitter(twitter):
+				create_twitter_in_db(current_bar.google_id, twitter)
+				save_twitter_attributes(current_bar.google_id, twitter)
+
+def save_twitter_attributes(current_bar_id, twitter):
+	t = Twitter.objects.get(google_id=current_bar_id)
+	attributes = []
+	for k, v in match.ATTRIBUTE_REGISTRY.items():
+		for item in v:
+			if item in t.statuses.lower():
+				attributes.append(k)
+	if attributes:
+		t.tweet_attributes = attributes
+		t.save()
+	
+				
+def create_twitter_in_db(current_bar_id, twitter):
+	tweets = []
+	for status in twitter:
+		tweets.append(status.text)
+	t = Twitter()
+	t.google_id = current_bar_id
+	t.screen_name = twitter[0].user.screen_name
+	t.created_at = twitter[0].user.created_at
+	try:
+		t.location = twitter[0].user.location
+	except:
+		pass
+	try:
+		t.profile_image = twitter[0].user.profile_image_url_https
+	except:
+		pass
+	try:
+		t.profile_banner = twitter[0].user.profile_banner_url
+	except:
+		pass
+	try:
+		t.profile_link_color = twitter[0].user.profile_link_color
+	except:
+		pass
+	try:
+		t.website = twitter[0].user.entities['url']['urls'][0]['expanded_url']
+	except:
+		pass
+	t.updated_date = timezone.now()	
+	if tweets:
+		t.statuses = tweets
+	t.save()
+
+# def create_tweets_in_db(twitter_info, current_bar):
 
 
+# 			if twitter:
+# 				twitter_info = API.user_timeline(screen_name=twitter.screen_name)
 
 def create_bar_in_db(current_bar):
 	b = Bar()
@@ -188,36 +224,49 @@ def bing_search(current_bar):
 def extract_alphanumeric_whitespace(string):
     return "".join([char for char in string if char in (ascii_letters + digits + ' ')])
 
-def draw_markers(current_bars_list):
+def draw_markers(current_bars_list, request):
 	markers = []
-	for x in current_bars_list:
-		q = Bar.objects.get(google_id=x.google_id)
-		marker_coordinates = [q.latitude, q.longitude]
-		markers.append(marker_coordinates)
+	red = 'https://storage.googleapis.com/support-kms-prod/SNP_2752125_en_v0'
+	green = 'https://storage.googleapis.com/support-kms-prod/SNP_2752129_en_v0'
+	yellow = 'https://storage.googleapis.com/support-kms-prod/SNP_2752063_en_v0'
+	input_ids = request.POST.getlist('inputs')
+	print(input_ids)
+	for bar in current_bars_list:
+		b = Bar.objects.get(google_id=bar.google_id)
+		try: 
+			t = Twitter.objects.get(google_id=bar.google_id)
+			truth = False
+			for item in input_ids:
+				if item in t.tweet_attributes:
+					markers.append([b.latitude, b.longitude, '/static/'+item+'.png'])
+					truth = True
+					break
+			if truth == False:
+				markers.append([b.latitude, b.longitude, green])
+		except:
+			markers.append([b.latitude, b.longitude, red])
 	return markers
 
-# class TwitterAccount():
-# 	def __init__(self, twitter, google_id):
-# 		self.name = twitter
-# 		self.google_id = google_id
 
-# def verify_possible_twitters(possible_twitters): 
-# 	verified_accounts = []
-# 	names = [twitter.name for twitter in possible_twitters]
-# 	twitters = API.lookup_users(screen_names=names)
-# 	for user in twitters:
-# 		if any(location in user.location.lower() for location in match.location): 
-# 			verified_accounts.append(user.screen_name.lower())
-# 	return verified_accounts
+	# for x in current_bars_list:
+	# 	q = Bar.objects.get(google_id=x.google_id)
 
-	
 
-# def get_twitter_match_object(possible_twitters, verified_accounts):
-# 	matches = []
-# 	for item in possible_twitters:
-# 		if item.name in verified_accounts:
-# 			matches.append(item)
-# 	return matches
+
+		# try:
+		# 	t = Twitter.objects.get(google_id=x.google_id)
+		# except:
+		# 	t = None
+		# if t:
+		# 	if t.tweet_attributes:
+		# 		marker_coordinates = [q.latitude, q.longitude, green]
+		# 	else:
+		# 		marker_coordinates = [q.latitude, q.longitude, yellow]
+		# else:
+		# 	marker_coordinates = [q.latitude, q.longitude, red]
+		# markers.append(marker)
+	# return markers
+
 
 def verify_twitter(twitter_info):
 	if any(location in twitter_info[0].user.location for location in match.location):
@@ -225,38 +274,11 @@ def verify_twitter(twitter_info):
 	else:
 		return False
 
-def create_twitter_in_db(twitter, current_bar):
-	t = Twitter()
-	t.google_id = current_bar.google_id
-	t.screen_name = twitter[0].user.screen_name
-	t.created_at = twitter[0].user.created_at
-	try:
-		t.location = twitter[0].user.location
-	except:
-		pass
-	try:
-		t.profile_image = twitter[0].user.profile_image_url_https
-	except:
-		pass
-	try:
-		t.profile_banner = twitter[0].user.profile_banner_url
-	except:
-		pass
-	try:
-		t.profile_link_color = twitter[0].user.profile_link_color
-	except:
-		pass
-	try:
-		t.website = twitter[0].user.entities['url']['urls'][0]['expanded_url']
-	except:
-		pass
-	t.save()
-
-	# print(current_bar.google_id)
-	# print(twitter[0].user.screen_name)
-	# print(twitter[0].user.location)
 
 
+
+
+# 2661f5
 
 # def get_twitter_statuses(matched_twitters):
 # 	for item in matched_twitters:
@@ -277,6 +299,7 @@ def create_twitter_in_db(twitter, current_bar):
 # 		#statuses
 # 		created_at = status[0].created_at
 # 		text = status[0].text
-# 		url1 = status[0].entities['urls'][0]['expaned_url']
+# 		url1 = status[0].entities['urls'][0]['expanded_url']
+		# extended_entities = status[0].extended_entities['media'][0]['display_url']
 
 

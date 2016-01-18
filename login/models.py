@@ -23,3 +23,6 @@ class Twitter(models.Model):
 	profile_banner = models.TextField(default='')
 	profile_link_color = models.TextField(default='')
 	website = models.TextField(default='')
+	updated_date = models.DateTimeField(null=True)
+	statuses = models.TextField(default='')
+	tweet_attributes = models.TextField(default='')

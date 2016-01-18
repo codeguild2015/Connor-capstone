@@ -16,7 +16,6 @@
 				{% else %}
 				var markers = [];
 				{% endif %}
-				console.log(markers)
         		var mapCanvas = document.getElementById('map');
         		var mapOptions = {
           			zoom: {{zoom}},
@@ -29,7 +28,8 @@
         			var position = new google.maps.LatLng(markers[i][0], markers[i][1]);
         			var marker = new google.maps.Marker({
         				position: position,
-        				map: map
+        				map: map,
+        				icon: markers[i][2],
         			})
         		}
       		}
@@ -37,11 +37,20 @@
 		</script>
 	</head>
 	<body>
-		<div id='header_div'>Main</div>
+		<div id='header_div'>Main </div>
 		<div id='map'></div>
+<!-- 		{% load static %} <img src="{ static "happyhour.png" %}" alt="Mountain View"/>
+				<img src="/static/happyhour.png" alt="Mountain View"/> -->
 		<div id='main_div'>
 			<form method="POST">
     			<input name="location_text" id="location" placeholder="Location" />
+    			<input type="checkbox" name="inputs" id="happyhour" value="happyhour"/>Happy Hour
+    			<input type="checkbox" name="inputs" id="nocover" value="nocover"/>No Cover
+    			<input type="checkbox" name="inputs" id="livemusic" value="livemusic"/>Live Music
+    			<input type="checkbox" name="inputs" id="sports" value="sports"/>Live Sports
+    			<input type="checkbox" name="inputs" id="ladies" value="ladies"/>Ladies Night
+    			<input type="checkbox" name="inputs" id="deals" value="deals"/>Special Deals
+    			<input type="checkbox" name="inputs" id="karaoke" value="karaoke"/>Karaoke
     			{% csrf_token %}
 			</form>
 		</div>

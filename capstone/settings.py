@@ -101,3 +101,10 @@ USE_TZ = False
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
+
+STATICFILES_DIRS = (
+    "/Users/Connor/Desktop/moranconnorj/code_guild/capstone/capstone/login/templates/static",
+    )
+
+MEDIA_ROOT = "/Users/Connor/Desktop/moranconnorj/code_guild/capstone/capstone/login/templates/static"
+MEDIA_URL = "/media/"
