@@ -118,51 +118,6 @@ def check_database_for_bar(current_bars):
 				create_twitter_in_db(current_bar.google_id, twitter)
 				save_twitter_attributes(current_bar.google_id, twitter)
 
-def save_twitter_attributes(current_bar_id, twitter):
-	t = Twitter.objects.get(google_id=current_bar_id)
-	attributes = []
-	for k, v in match.ATTRIBUTE_REGISTRY.items():
-		for item in v:
-			if item in t.statuses.lower():
-				attributes.append(k)
-	if attributes:
-		t.tweet_attributes = attributes
-		t.save()
-	
-				
-def create_twitter_in_db(current_bar_id, twitter):
-	tweets = []
-	for status in twitter:
-		tweets.append(status.text)
-	t = Twitter()
-	t.google_id = current_bar_id
-	t.screen_name = twitter[0].user.screen_name
-	t.created_at = twitter[0].user.created_at
-	try:
-		t.location = twitter[0].user.location
-	except:
-		pass
-	try:
-		t.profile_image = twitter[0].user.profile_image_url_https
-	except:
-		pass
-	try:
-		t.profile_banner = twitter[0].user.profile_banner_url
-	except:
-		pass
-	try:
-		t.profile_link_color = twitter[0].user.profile_link_color
-	except:
-		pass
-	try:
-		t.website = twitter[0].user.entities['url']['urls'][0]['expanded_url']
-	except:
-		pass
-	t.updated_date = timezone.now()	
-	if tweets:
-		t.statuses = tweets
-	t.save()
-
 
 def create_bar_in_db(current_bar):
 	b = Bar()
@@ -213,6 +168,60 @@ def bing_search(current_bar):
 	if bing_result['d']['results']:
 		return bing_result['d']['results'][0]['Url'].rsplit('/', 1)[-1].lower()
 
+				
+def create_twitter_in_db(current_bar_id, twitter):
+	tweets = []
+	for status in twitter:
+		tweets.append(status.text)
+	t = Twitter()
+	t.google_id = current_bar_id
+	t.screen_name = twitter[0].user.screen_name
+	t.created_at = twitter[0].user.created_at
+	try:
+		t.location = twitter[0].user.location
+	except:
+		pass
+	try:
+		t.profile_image = twitter[0].user.profile_image_url_https
+	except:
+		pass
+	try:
+		t.profile_banner = twitter[0].user.profile_banner_url
+	except:
+		pass
+	try:
+		t.profile_link_color = twitter[0].user.profile_link_color
+	except:
+		pass
+	try:
+		t.website = twitter[0].user.entities['url']['urls'][0]['expanded_url']
+	except:
+		pass
+	t.updated_date = timezone.now()	
+	if tweets:
+		t.statuses = tweets
+	t.save()
+
+
+def save_twitter_attributes(current_bar_id, twitter):
+	t = Twitter.objects.get(google_id=current_bar_id)
+	attributes = []
+	for k, v in match.ATTRIBUTE_REGISTRY.items():
+		for item in v:
+			if item in t.statuses.lower():
+				attributes.append(k)
+	if attributes:
+		t.tweet_attributes = attributes
+		t.save()
+		
+	
+def verify_twitter(twitter_info):
+	if any(location in twitter_info[0].user.location for location in match.location):
+		return True
+	else:
+		return False
+
+
 def extract_alphanumeric_whitespace(string):
     return "".join([char for char in string if char in (ascii_letters + digits + ' ')])
 
@@ -239,11 +248,6 @@ def draw_markers(current_bars_list, request):
 		markers.append([b.latitude, b.longitude, b.name, marker])
 	return markers
 
-def verify_twitter(twitter_info):
-	if any(location in twitter_info[0].user.location for location in match.location):
-		return True
-	else:
-		return False
 
 
 
