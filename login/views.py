@@ -24,19 +24,24 @@ auth.set_access_token(access_token, access_secret)
 API = tweepy.API(auth)
 
 def home_page(request):
+	""" When a request comes into the home page, route it based on if its a post request"""
 	if request.method == 'POST':
 		return render_after_POST(request)
 
 	else:
 		return render_default_home_page(request)
 
+
 def render_default_home_page(request):
+	""" Renders the default home page with a preset map center and zoom level """
 	return render(request, 'home.html', {
 		'new_location_text': '45.5200165, -122.67926349999999',
 		'zoom': 13
 		})
 
+
 def render_after_POST(request):
+	""" Calls the google functions, and renders the home page with map markers added to the map """
 	coordinates = get_google_coordinates(request)
 	bars = get_google_bars(coordinates)
 	current_bars_list = bars_to_class(bars)
@@ -50,7 +55,11 @@ def render_after_POST(request):
 		'markers': marker_coordinates
 		})
 
+
 def get_google_coordinates(request):
+	""" Takes in an address sent via post, and makes a google API geocode call on it to retrieve and return 
+	the latitude and longitude of that address 
+	"""
 	key = '&key='+ secrets.googlekey
 	search_text = request.POST.get('location_text', '').replace(' ', '+')
 
@@ -59,13 +68,17 @@ def get_google_coordinates(request):
 	str_responseLoc = googleResponseLoc.read().decode('utf-8') #convert googleResponse to be readable
 	jsonResponseLoc = json.loads(str_responseLoc)
 
-
 	latitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lat'])
 	longitude = str(jsonResponseLoc['results'][0]['geometry']['location']['lng'])
 	coordinates = latitude + ',' + longitude
 	return coordinates
 
+
 def get_google_bars(coordinates):
+	""" Takes in latitude and logitude coordinates, makes a google API nearbysearch call for bars 
+	located within 600 meters of those coordinates, and returns a list of the bars in the form of a 
+	json response
+	 """
 	nearby_URL1 = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location='
 	nearby_URL2 = '&radius=600&types=bar&key='
 	key = secrets.googlekey
@@ -77,9 +90,13 @@ def get_google_bars(coordinates):
 
 
 def bars_to_class(bars):
+	""" Takes in a list of bars in json format, and returns a list of bar Objects created using the
+	CurrentBar() class
+	"""
 	current_bars = [CurrentBar(bar) for bar in bars['results']] 
 	# current_bars = [CurrentBar(bars['results'][1])] #USED TO LIMIT BARS RETURNED TO 1
 	return current_bars
+
 
 class CurrentBar():
 	def __init__(self, bar):
@@ -98,12 +115,16 @@ class CurrentBar():
 		if 'opening_hours' in bar and 'open_now' in bar['opening_hours']:
 			self.open_at_update = bar['opening_hours']['open_now']
 
+
 def extract_alphanumeric(string):
+	""" takes in a string and returns the string with all non-alphanumeric characters removed  """
     return "".join([char for char in string if char in (ascii_letters + digits)])
 
 
-
 def check_database_for_bar(current_bars):
+	""" main database function. takes in a list of current bars, and checks if it exists in the database.
+
+	"""
 	for current_bar in current_bars:
 		if Bar.objects.filter(google_id=current_bar.google_id):
 			# compare_date_time() MAKE
@@ -112,7 +133,7 @@ def check_database_for_bar(current_bars):
 		else:
 			create_bar_in_db(current_bar)
 
-			twitter_name = bing_search(current_bar)
+			twitter_name = bing_search(current_bar) # WITH CHANGES TO TWITTER CALL FUNCTION, NEEDS REFACTORING INTO NEW FUNCTIONS
 			twitter = API.user_timeline(screen_name=twitter_name, count=2)
 			if twitter and verify_twitter(twitter):
 				create_twitter_in_db(current_bar.google_id, twitter)
@@ -120,6 +141,7 @@ def check_database_for_bar(current_bars):
 
 
 def create_bar_in_db(current_bar):
+	"""takes in current_bar object, and creates an item in the database with the desired attributes"""
 	b = Bar()
 	b.google_id = current_bar.google_id
 	b.name = current_bar.name
@@ -139,6 +161,7 @@ def create_bar_in_db(current_bar):
 
 
 def update_bar_in_db(current_bar):
+	"""takes in current_bar object, and updates an existing item in a database with the desired fluid attributes"""
 	b = Bar.objects.get(google_id=current_bar.google_id)
 	if hasattr(current_bar, 'vicinity'):
 		b.vicinity = current_bar.vicinity
@@ -151,8 +174,11 @@ def update_bar_in_db(current_bar):
 		b.open_at_update = current_bar.open_at_update
 	b.save()
 
-def bing_search(current_bar):
 
+def bing_search(current_bar):
+	""" takes in current_bar object, makes a Bing Search API call with the bar name as the search query, 
+	and returns a string of the twitter url
+	"""
 	API_KEY = 'q0D7TMvQsCC3x+s8+QdD++9OK+3eUN4QuodsL3oK6Sc'
 	user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36"
 	headers= {'User-Agent': user_agent}
@@ -170,6 +196,9 @@ def bing_search(current_bar):
 
 				
 def create_twitter_in_db(current_bar_id, twitter):
+	""" takes in the id of the current bar, and the tweepy object of the twitter api call, 
+	and creates the twitter item in the database
+	 """
 	tweets = []
 	for status in twitter:
 		tweets.append(status.text)
@@ -204,6 +233,7 @@ def create_twitter_in_db(current_bar_id, twitter):
 
 
 def save_twitter_attributes(current_bar_id, twitter):
+	""" Takes in current_bar_id, and uses it to key into the Twitter table to save match attributes from the saved tweets """
 	t = Twitter.objects.get(google_id=current_bar_id)
 	attributes = []
 	for k, v in match.ATTRIBUTE_REGISTRY.items():
@@ -216,6 +246,7 @@ def save_twitter_attributes(current_bar_id, twitter):
 		
 	
 def verify_twitter(twitter_info):
+	""" takes in a tweepy user_timeline objects, and checks match.location against the tweepy object location """
 	if any(location in twitter_info[0].user.location for location in match.location):
 		return True
 	else:
@@ -223,9 +254,14 @@ def verify_twitter(twitter_info):
 
 
 def extract_alphanumeric_whitespace(string):
+	""" takes in a string and returns the string with all non-alphanumeric characters besides spaces removed """
     return "".join([char for char in string if char in (ascii_letters + digits + ' ')])
 
+
 def draw_markers(current_bars_list, request):
+	""" takes in a list of Bar objects and the request to compare the 
+	tweet_attributes of the current bar with the requested attributes of the post
+	 """
 	markers = []
 	red = 'https://storage.googleapis.com/support-kms-prod/SNP_2752125_en_v0'
 	green = 'https://storage.googleapis.com/support-kms-prod/SNP_2752129_en_v0'
